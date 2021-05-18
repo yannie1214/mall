@@ -4,15 +4,13 @@
     <scroll :probe-type="3"
             :pull-up-load="true"
             class="content"
-            @pullingUp="loadMore"
             @scroll="contentScroll"
+            @pullingUp="loadMore"
             ref="scroll">
       <home-swiper :banners="banners"></home-swiper>
       <recommend-view :recommends="recommends"></recommend-view>
       <feature-view></feature-view>
-      <tab-control :titles="['流行','新款','精选']" 
-                  class="tab-control"
-                  @tabClick="tabClick"></tab-control>
+      <tab-control :titles="['流行','新款','精选']" @tabClick="tabClick" ref="tabControl"></tab-control>
       <goods-list :goods="showGoods"></goods-list>
     </scroll>
     <!-- 组件是不能监听点击的，想要让它监听点击必须加上 native 的修饰符,不仅仅是点击事件，所有原生事件都是 -->
@@ -35,6 +33,7 @@
     getHomeMultidata,
     getHomeGoods,
     } from 'network/home'
+  import {debounce} from 'common/utils'
 
   export default {
     name: "Home",
@@ -59,6 +58,7 @@
         },
         currentType: 'pop',
         isShowBackTop: false,
+        tabOffsetTop: 0,
       }
     },
     computed: {
@@ -76,6 +76,24 @@
       this.getHomeGoods('new')
       this.getHomeGoods('sell')
     },
+    mounted () {
+      // 如果需要拿 scroll 这个东西最好把这部分代码写到 mounted 里面，而不是 created 里面
+      // 1. 监听 item 中图片加载完成
+      // 防抖动函数(简单可以理解为，等待图片都加载完了才调用函数)
+      const refresh = debounce(this.$refs.scroll.refresh, 50)
+      this.$bus.$on('itemImageLoad', () => {
+        refresh()
+      })
+
+      // 这样写的话 refresh 就会被调用 30 次
+      // this.$bus.$on('itemImageLoad', () => {
+      //   this.$refs.scroll.refresh()
+      //   console.log('----------------');
+      // })
+
+      // 2. 获取 tabControl 的 offsetTop
+      this.tabOffsetTop = this.$refs.tabControl.$el.offsetTop
+    },
     methods: {
       /**
        * 事件监听相关的方法
@@ -92,6 +110,12 @@
             this.currentType = 'sell'
             break;
         }
+      },
+      contentScroll(position) {
+        this.isShowBackTop = -position.y > 1000
+      },
+      loadMore() {
+        this.getHomeGoods(this.currentType)
       },
 
       /**
@@ -112,18 +136,13 @@
           this.goods[type].list.push(...res.data.list)
           this.goods[type].page += 1
 
+          // 完成了上传加载更多
           this.$refs.scroll.finishPullUp()
        })
       },
       backClick() {
         this.$refs.scroll.scrollTo(0, 0)
       },
-      contentScroll(position) {
-        this.isShowBackTop = -position.y > 1000
-      },
-      loadMore() {
-        this.getHomeGoods(this.currentType)
-      }
     }
   }
 </script>
@@ -141,11 +160,6 @@
     left: 0;
     right: 0;
     top: 0;
-    z-index: 9;
-  }
-  .tab-control {
-    /* position: sticky; */
-    top: 44px;
     z-index: 9;
   }
   .content{
